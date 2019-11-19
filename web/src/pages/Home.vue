@@ -1,7 +1,12 @@
 <template>
-    <div class="container">
-        <h1 class="subtitle">Home</h1>
-    </div>
+    <v-container fill-height>
+        <v-layout
+                justify-center
+                align-center
+        >
+            Home
+        </v-layout>
+    </v-container>
 </template>
 
 <script>

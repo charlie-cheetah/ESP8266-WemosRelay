@@ -1,23 +1,28 @@
 import Vue from 'vue'
 import VueRouter from 'vue-router'
-import Buefy from 'buefy'
-import 'buefy/dist/buefy.css'
+import VueNativeSock from 'vue-native-websocket'
 
-Vue.use(Buefy)
 Vue.config.productionTip = false
 Vue.use(VueRouter)
+
+Vue.prototype.$location = '192.168.1.107';
+//Vue.prototype.$location = window.location.host;
+
+Vue.use(VueNativeSock, 'ws://' +  window.location.host + '/ws', {
+    connectManually: true,
+    reconnection: true // (Boolean) whether to reconnect automatically (false)
+})
 
 import App from './App.vue'
 import Home from './pages/Home'
 import Laser from './pages/Laser'
 import Configuration from './pages/Configuration'
-import Update from './pages/Update'
+import vuetify from './plugins/vuetify';
 
 const routes = [
     { path: '/', component: Home },
     { path: '/laser', component: Laser },
     { path: '/configuration', component: Configuration },
-    { path: '/update', component: Update }
 ]
 
 const router = new VueRouter({
@@ -25,6 +30,7 @@ const router = new VueRouter({
 })
 
 new Vue({
-  router,
-  render: h => h(App),
+    router,
+    vuetify,
+    render: h => h(App)
 }).$mount('#app')

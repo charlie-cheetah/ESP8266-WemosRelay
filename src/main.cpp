@@ -14,6 +14,15 @@
 #include <ArtnetWifi.h>
 #include <NeoPixelBus.h>
 
+// Global universe buffer
+struct {
+  uint16_t universe;
+  uint16_t length;
+  uint8_t sequence;
+  uint8_t *data;
+} global;
+
+#include "WebSocket.h"
 #include "send_break.h"
 
 // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
@@ -27,28 +36,23 @@ bool display_enabled = true;
 ArtnetWifi artnet;
 unsigned long packetCounter = 0, frameCounter = 0;
 float fps = 0;
-// Global universe buffer
-struct {
-  uint16_t universe;
-  uint16_t length;
-  uint8_t sequence;
-  uint8_t *data;
-} global;
+
 
 //WS281X Pixels
 #define NUM_LEDS 170  //max 1 universe
 #define DATA_PIN RX
 NeoPixelBus<NeoGrbFeature, Neo800KbpsMethod> strip(NUM_LEDS, DATA_PIN);
 
-const int relayPin = D3;
+const int relayPin = D6;
 DNSServer dnsServer;
 AsyncWebServer server(80);
+AsyncWebSocket previewSocket("/ws");
 AsyncWiFiManager wifiManager(&server, &dnsServer);
 char deviceName[40];
 bool shouldSaveConfig = false;
 
 // keep track of the timing of the function calls
-long tic_loop = 0, tic_fps = 0, tic_packet = 0, tic_web = 0;
+long tic_loop = 0, tic_fps = 0, tic_packet = 0, tic_ws = 0;
 
 #define MIN(x,y) (x<y ? x : y)
 
@@ -152,23 +156,47 @@ void setup() {
   tic_loop   = millis();
   tic_packet = millis();
   tic_fps    = millis();
-  tic_web    = 0;
+  tic_ws    = millis();
 }
 
 void loop() {
   ArduinoOTA.handle();
   artnet.read();
 
-  // this section gets executed at a maximum rate of around 40Hz
-  if ((millis() - tic_loop) > 25) {
+  //Handle WebSocket
+  if ((millis() - tic_ws) > 250) { //4Hz
+    tic_ws = millis();
+    previewSocket.cleanupClients();
+    //previewSocket.binaryAll((uint8_t*)board.getLeds(), (size_t)BOARD_DATA_SIZE);
+  }
+
+  //Show FPS
+  if ((millis() - tic_fps) > 1000 && (packetCounter > 1 || fps > 0)) { //1Hz
+    fps = (100000 * packetCounter / (millis() - tic_fps)) / 100;
+    tic_fps = millis();
+    packetCounter = 0;
+    Serial.print("FPS = ");
+    Serial.println(fps);
+    
+    if (display_enabled) {
+      display.clearDisplay();
+      display.setCursor(0,0);
+      display.print("FPS: ");
+      display.println(fps);
+      display.display();
+    }
+  }
+
+  //Send data to DMX / Show on LEDs
+  if ((millis() - tic_loop) > 25) { //40Hz
     tic_loop = millis();
 
-    //sendBreak();
+    sendBreak();
     strip.Show();
 
     Serial1.write(0); // Start-Byte
     // send out the value of the selected channels (up to 512)
-    for (int i = 0; i < global.length; i++) {
+    for (int i = 0; i < 10; i++) {
       Serial1.write(global.data[i]);
       }
     }
@@ -230,6 +258,10 @@ void initTest()
 
 void setupWebServer()
 {
+  //WebSocekt to controll output
+  previewSocket.onEvent(onWsEvent);
+  server.addHandler(&previewSocket);
+
   // Server with different default file
   server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
 
@@ -383,24 +415,8 @@ void SaveSettings()
 
 //this will be called for each UDP packet received
 void onDmxPacket(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t * data) {
-  // print some feedback
+  // count FPS
   packetCounter++;
-  if ((millis() - tic_fps) > 1000) {
-    // don't estimate the FPS too frequently
-    fps = 1000 * packetCounter / (millis() - tic_fps);
-    tic_fps = millis();
-    packetCounter = 0;
-    Serial.print("FPS = ");
-    Serial.print(fps);
-    if (display_enabled) {
-      display.clearDisplay();
-      display.setCursor(0,0);
-      display.print("FPS: ");
-      display.println(fps);
-      display.display();
-    }
-  }
-  Serial.println();
 
   if (universe == 1) {
     // read universe and put into the right part of the display buffer

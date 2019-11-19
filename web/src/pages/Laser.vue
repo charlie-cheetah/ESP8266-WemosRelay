@@ -1,75 +1,82 @@
 <template>
-    <div class="container">
-        <h1 class="subtitle">Laser</h1>
-        <div class="buttons">
-            <b-button :type="relay===1?'is-success':'is-light'" @click="turnOn">On</b-button>
-            <b-button :type="relay===0?'is-danger':'is-light'" @click="turnOff">Off</b-button>
-        </div>
+    <v-container fill-height>
+        <v-layout class="flex-column">
+            <h1 class="subtitle">Laser</h1>
 
-        {{response}}
+                <v-switch
+                        v-model="switch1"
+                        :label="switch1?'On':'Off'"
 
-        <b-field label="Pattern" class="">
-            <b-select v-model="ch1" @input="sendData">
-                <option
-                        v-for="option in data"
-                        :value="option.id"
-                        :key="option.id">
-                    {{ option.name }}
-                </option>
-            </b-select>
-        </b-field>
+                ></v-switch>
 
-        <b-field label="Pattern" class="">
-            <b-slider v-model="ch2" :max="255" @dragstart="startInterval" @dragend="stopInterval" @change="sendData"></b-slider>
-        </b-field>
 
-        <b-field label="Rotation" class="p-t-md">
-            <b-slider v-model="ch3" :max="255" @dragging="sendData" @change="sendData">
+
+            {{response}}
+
+            <v-select v-model="ch1" @input="sendData" :items="data"
+                      item-text="name"
+                      item-value="id">
+            </v-select>
+
+
+            <v-subheader>Pattern</v-subheader>
+
+            <v-slider label="Pattern"
+                      thumb-label
+                      v-model="ch2" :max="255" @end="sendData" @change="sendData"></v-slider>
+
+            <v-slider v-model="ch3"
+                      thumb-label
+                      label="Rotation"
+                      :max="255"
+                      @dragging="sendData"
+                      @change="sendData"
+                      :tick-labels="rotationLabels">
                 <b-slider-tick :value="0">Angle</b-slider-tick>
                 <b-slider-tick :value="128">Speed clockwise</b-slider-tick>
                 <b-slider-tick :value="192">Speed counterclockwise</b-slider-tick>
-            </b-slider>
-        </b-field>
+            </v-slider>
 
-        <b-field label="Flip horizontal" class="p-t-md">
-            <b-slider v-model="ch4" :max="255" @dragging="sendData" @change="sendData">
+            <v-subheader>Flip horizontal</v-subheader>
+
+            <v-slider v-model="ch4" :max="255" @dragging="sendData" @change="sendData">
                 <b-slider-tick :value="0">Angle</b-slider-tick>
                 <b-slider-tick :value="128">Speed</b-slider-tick>
-            </b-slider>
-        </b-field>
+            </v-slider>
 
-        <b-field label="Flip vertical" class="p-t-md">
-            <b-slider v-model="ch5" :max="255" @dragging="sendData" @change="sendData">
+            <v-subheader>Flip vertical</v-subheader>
+
+            <v-slider v-model="ch5" :max="255" @dragging="sendData" @change="sendData">
                 <b-slider-tick :value="0">Angle</b-slider-tick>
                 <b-slider-tick :value="128">Speed</b-slider-tick>
-            </b-slider>
-        </b-field>
+            </v-slider>
 
-        <b-field label="Position vertical" class="p-t-md">
-            <b-slider v-model="ch6" :max="255" @dragging="sendData" @change="sendData">
+            <v-subheader>Position vertical</v-subheader>
+
+            <v-slider v-model="ch6" :max="255" @dragging="sendData" @change="sendData">
                 <b-slider-tick :value="0">Position</b-slider-tick>
                 <b-slider-tick :value="128">Speed</b-slider-tick>
-            </b-slider>
-        </b-field>
+            </v-slider>
 
-        <b-field label="Position horizontal" class="p-t-md">
-            <b-slider v-model="ch7" :max="255" @dragging="sendData" @change="sendData">
+            <v-subheader>Position horizontal</v-subheader>
+
+            <v-slider v-model="ch7" :max="255" @dragging="sendData" @change="sendData">
                 <b-slider-tick :value="0">Position</b-slider-tick>
                 <b-slider-tick :value="128">Speed</b-slider-tick>
-            </b-slider>
-        </b-field>
+            </v-slider>
 
-        <b-field label="Size" class="p-t-md">
-            <b-slider v-model="ch8" :max="255" @dragging="sendData" @change="sendData">
+            <v-subheader>Size</v-subheader>
+
+            <v-slider v-model="ch8" :max="255" @dragging="sendData" @change="sendData">
                 <b-slider-tick :value="0">Fixed</b-slider-tick>
                 <b-slider-tick :value="64">Ascending speed</b-slider-tick>
                 <b-slider-tick :value="128">Descending speed</b-slider-tick>
                 <b-slider-tick :value="192">Scaling speed</b-slider-tick>
-            </b-slider>
-        </b-field>
+            </v-slider>
 
-        <b-field label="Color" class="p-t-md">
-            <b-slider v-model="ch9" :max="255" @dragging="sendData" @change="sendData">
+            <v-subheader>Color</v-subheader>
+
+            <v-slider v-model="ch9" :max="255" @dragging="sendData" @change="sendData">
                 <b-slider-tick :value="0">Purple</b-slider-tick>
                 <b-slider-tick :value="20">Red</b-slider-tick>
                 <b-slider-tick :value="40">Purple</b-slider-tick>
@@ -78,21 +85,25 @@
                 <b-slider-tick :value="100">Purple</b-slider-tick>
                 <b-slider-tick :value="120">Purple</b-slider-tick>
                 <b-slider-tick :value="128">Cycle speed</b-slider-tick>
-            </b-slider>
-        </b-field>
+            </v-slider>
 
-
-    </div>
+            <v-btn @click="addSequence">Add to sequence</v-btn>
+        </v-layout>
+    </v-container>
 </template>
 
 <script>
+    import _ from 'lodash'
+
     export default {
         name: "Laser",
         data() {
             return {
-                relay: 0,
+                switch1: false,
                 response: '',
                 interval: false,
+                rotationLabels: [''],
+                rotationLabels2: [''],
                 ch1: 1,
                 ch2: 0,
                 ch3: 0,
@@ -111,16 +122,20 @@
             }
         },
         mounted: function () {
-            let url = new URL('http://' + window.location.host + '/artnet');
-            fetch(url, {
+            this.$connect('ws://' +  this.$location + '/ws');
+            this.rotationLabels = [null];
+            this.rotationLabels[100] = 'Summer';
+            //this.rotationLabels[1] = 'b';
 
-            }).then(function(response){
-                this.response = response
-            });
+            console.log(this.rotationLabels);
         },
         methods: {
+            addSequence: function() {
+
+            },
             turnOn: function() {
-                let url = new URL('http://' + window.location.host + '/on');
+                console.log(this.$location);
+                let url = new URL('http://' + this.$location + '/relayon');
                 fetch(url, {
 
                 }).then(function(response){
@@ -128,39 +143,32 @@
                 });
             },
             turnOff: function() {
-                let url = new URL('http://' + window.location.host + '/off');
+                let url = new URL('http://' + this.$location + '/relayoff');
                 fetch(url, {
 
                 }).then(function(response){
                     this.response = response
                 });
             },
-            startInterval: function() {
-                this.interval = setInterval(function(){ this.sendData(); }.bind(this),100);
-            },
-            stopInterval: function() {
-                clearInterval(this.interval);
-            },
             sendData: function() {
-                let url = new URL('http://' + window.location.host + '/artnet');
-                let params = {
-                    0:this.ch1,
-                    1:this.ch2,
-                    2:this.ch3,
-                    3:this.ch4,
-                    4:this.ch5,
-                    5:this.ch6,
-                    6:this.ch7,
-                    7:this.ch8,
-                    8:this.ch9
-                    }
-                Object.keys(params).forEach(key => url.searchParams.append(key, params[key]))
-                fetch(url, {
-                    method: 'post',
-                }).then(function(response){
-                    this.response = response
-                });
-            }
+                if (this.$socket.readyState === WebSocket.OPEN) this.sendThrottled();
+            },
+            sendThrottled: _.throttle(function () {
+                const bytesArray = [
+                    this.ch1,
+                    this.ch2,
+                    this.ch3,
+                    this.ch4,
+                    this.ch5,
+                    this.ch6,
+                    this.ch7,
+                    this.ch8,
+                    this.ch9,
+                ];
+                let bytestream = Uint8Array.from(bytesArray);
+                if (this.$socket)
+                    this.$socket.send(bytestream);
+            }, 25)
         }
     }
 </script>
