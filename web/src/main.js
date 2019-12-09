@@ -18,6 +18,7 @@ import Home from './pages/Home'
 import Laser from './pages/Laser'
 import Configuration from './pages/Configuration'
 import vuetify from './plugins/vuetify';
+require('./metronome.js');
 
 const routes = [
     { path: '/', component: Home },

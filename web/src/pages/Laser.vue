@@ -117,15 +117,67 @@
                     </v-card-actions>
                 </v-card>
 
-                <div class="mt-4">
-                    <div class="d-flex pa-2 elevation-4 mb-2" :class="i===currentPreset?'teal':'secondary'" @click="selectPreset(i)" v-for="(pre,i) in sequences[currentSequence].presets" :key="'pre'+i">
-                        <div>{{pre.values[0]}}</div>
-                        <div>{{pre.values[1]}}</div>
-                        <v-btn color="error" @click="removePreset(index)">delete</v-btn>
-                    </div>
-                </div>
+                <v-row>
+                    <v-col>
+                        <div class="d-flex justify-space-between pa-2 elevation-4 mb-2" :class="i===currentPreset?'teal':'secondary'" @click="selectPreset(i)" v-for="(pre,i) in sequences[currentSequence].presets" :key="'pre'+i">
+                            <v-chip :color="pre.values[0]===1?'error':'orange'">
+                                {{pre.values[0]===1?'Off':''}}
+                                {{pre.values[0]===100?'M':''}}
+                            </v-chip>
 
+                            <div>{{pre.values[1]}}</div>
+                            <v-chip color="orange"><v-icon>mdi-rotate-left</v-icon>{{pre.values[2]}}</v-chip>
+                            <v-chip color="orange"><v-icon>mdi-arrow-expand-vertical</v-icon>{{pre.values[3]}}</v-chip>
+                            <v-chip color="orange"><v-icon>mdi-arrow-expand-horizontal</v-icon>{{pre.values[4]}}</v-chip>
+                            <v-chip color="orange"><v-icon>mdi-swap-vertical</v-icon>{{pre.values[5]}}</v-chip>
+                            <v-chip color="orange"><v-icon>mdi-swap-horizontal</v-icon>{{pre.values[6]}}</v-chip>
+                            <v-chip color="orange"><v-icon>mdi-arrow-expand-all</v-icon>{{pre.values[6]}}</v-chip>
+                            <v-chip color="orange"><v-icon>mdi-palette</v-icon>{{pre.values[6]}}</v-chip>
 
+                            <v-btn color="error" @click="removePreset(i)">delete</v-btn>
+                        </div>
+                    </v-col>
+                    <v-col>
+                        <v-card class="mx-auto">
+                            <v-toolbar flat dense>
+                                <v-toolbar-title>
+                                    <span class="subheading">METRONOME</span>
+                                </v-toolbar-title>
+                            </v-toolbar>
+
+                            <v-card-text>
+                                <v-row class="mb-4" justify="space-between">
+                                    <v-col class="text-left">
+                                        <span class="display-3 font-weight-light" v-text="bpm"></span>
+                                        <span class="subheading font-weight-light mr-1">BPM</span>
+                                    </v-col>
+                                    <v-col class="text-right">
+                                        <v-btn color="primary" dark depressed fab @click="toggle">
+                                            <v-icon large>{{ isPlaying ? 'mdi-pause' : 'mdi-play' }}</v-icon>
+                                        </v-btn>
+                                    </v-col>
+                                </v-row>
+
+                                <v-slider
+                                        v-model="bpm"
+                                        color="primary"
+                                        track-color="grey"
+                                        always-dirty
+                                        min="40"
+                                        max="218"
+                                >
+                                    <template v-slot:prepend>
+                                        <v-icon @click="decrement">mdi-minus</v-icon>
+                                    </template>
+
+                                    <template v-slot:append>
+                                        <v-icon @click="increment">mdi-plus</v-icon>
+                                    </template>
+                                </v-slider>
+                            </v-card-text>
+                        </v-card>
+                    </v-col>
+                </v-row>
         </v-layout>
     </v-container>
 </template>
@@ -137,7 +189,7 @@
 
     export default {
         name: "Laser",
-        components: {BSlider,BSliderTick},
+        components: { BSlider,BSliderTick},
         data() {
             return {
                 switch1: false,
@@ -168,7 +220,10 @@
                             {values:[1,0,0,0,0,0,0,0]}
                         ]
                     },
-                ]
+                ],
+                bpm: 40,
+                metronome: null,
+                isPlaying: false,
             }
         },
         mounted: function () {
@@ -178,7 +233,28 @@
                 this.sequences = JSON.parse(localStorage.getItem('sequences'));
             }
         },
+        computed: {
+            animationDuration () {
+                return `${60 / this.bpm}s`
+            },
+        },
         methods: {
+            decrement () {
+                this.bpm--
+            },
+            increment () {
+                this.bpm++
+            },
+            toggle () {
+                this.isPlaying = !this.isPlaying;
+                if (this.isPlaying) {
+                    this.metronome = new window.Metronome(this.bpm,100);
+                    this.metronome.start();
+                } else {
+                    this.metronome.stop();
+                }
+
+            },
             saveStorage: function() {
                 localStorage.setItem('sequences', JSON.stringify(this.sequences));
             },
@@ -205,7 +281,9 @@
             },
             selectPreset: function(index) {
                 this.currentPreset = index;
-                //for (int in this.sequences[])
+                for (const x in this.sequences[this.currentSequence].presets[index].values) {
+                    this['ch'+x] = this.sequences[this.currentSequence].presets[index].values[x];
+                }
             },
             deleteSequence: function() {
                 let tmp = this.currentSequence;
