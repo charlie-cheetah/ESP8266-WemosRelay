@@ -5,7 +5,7 @@ import VueNativeSock from 'vue-native-websocket'
 Vue.config.productionTip = false
 Vue.use(VueRouter)
 
-Vue.prototype.$location = '192.168.1.107';
+Vue.prototype.$location = '192.168.1.102';
 //Vue.prototype.$location = window.location.host;
 
 Vue.use(VueNativeSock, 'ws://' +  window.location.host + '/ws', {

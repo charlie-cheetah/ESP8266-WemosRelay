@@ -11,7 +11,8 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <ArtnetWifi.h>
+#include <WiFiUdp.h>
+#include <ArtnetnodeWifi.h>
 #include <NeoPixelBus.h>
 
 // Global universe buffer
@@ -21,6 +22,8 @@ struct {
   uint8_t sequence;
   uint8_t *data;
 } global;
+
+
 
 #include "WebSocket.h"
 #include "send_break.h"
@@ -33,7 +36,8 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 bool display_enabled = true;
 
 // Artnet settings
-ArtnetWifi artnet;
+WiFiUDP UdpSend;
+ArtnetnodeWifi artnet;
 unsigned long packetCounter = 0, frameCounter = 0;
 float fps = 0;
 
@@ -48,7 +52,11 @@ DNSServer dnsServer;
 AsyncWebServer server(80);
 AsyncWebSocket previewSocket("/ws");
 AsyncWiFiManager wifiManager(&server, &dnsServer);
-char deviceName[40];
+char deviceName[17];
+char longDeviceName[63];
+int set_universe = 1;
+int startingChannel = 0;
+bool dmxEnabled = true;
 bool shouldSaveConfig = false;
 
 // keep track of the timing of the function calls
@@ -72,10 +80,11 @@ void setup() {
   //configure the relay
   pinMode(relayPin, OUTPUT);
 
-  //configure serial for DMX
-  Serial1.begin(250000, SERIAL_8N2);
+  pinMode(2, OUTPUT);
+  digitalWrite(2, LOW); // turn on LED
+
   //configure the serial port (monitor)
-  Serial.begin(74880);
+  Serial.begin(115200);
   Serial.println("Setup started");
 
   global.universe = 0;
@@ -92,25 +101,27 @@ void setup() {
 
   if (display_enabled) {
     display.display();
-    delay(5000); // Pause for 2 seconds
-
-    // Clear the buffer
-    display.clearDisplay();
-    display.setCursor(0,0);
-    display.setTextColor(WHITE);
-    display.setTextSize(1);
-    display.setTextWrap(true);
-    display.println("Device started");
-    display.display();
   }
 
   LoadSettings();
 
+  //Start led strip
+  strip.Begin();
+  initTest();
+
+  if (dmxEnabled) {
+    //configure serial for DMX
+    Serial1.begin(250000, SERIAL_8N2);
+  } else {
+    pinMode(2, OUTPUT);
+    digitalWrite(2, HIGH); // turn off LED
+  }
+  
   //Setup WiFiManager and get us connected to wifi
   wifiManager.setAPCallback(configModeCallback);
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   // id/name, placeholder/prompt, default, length
-  AsyncWiFiManagerParameter custom_devicename("DeviceName", "Device Name", deviceName, 40);
+  AsyncWiFiManagerParameter custom_devicename("DeviceName", "Device Name", deviceName, 17);
   wifiManager.addParameter(&custom_devicename);
   wifiManager.setTimeout(180);
   if(!wifiManager.autoConnect()) {
@@ -121,6 +132,9 @@ void setup() {
   if (display_enabled) {
     display.clearDisplay();
     display.setCursor(0,0);
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setTextWrap(true);
     display.print("SSID: ");
     display.println(WiFi.SSID());
     display.print("IP: "); 
@@ -128,6 +142,8 @@ void setup() {
     display.println("Relay status: Off");
     display.display();
   }
+
+  Serial.println("Save config");
 
   //save settings if we need to
   if (shouldSaveConfig)
@@ -141,22 +157,31 @@ void setup() {
 
   //start the web server
   server.begin();
-
   SetupOTA();
 
-  //Start led strip
-  strip.Begin();
-  initTest();
+  Serial.println("Web server started");
 
   //Start receivng artnet packets
+  // max. 17 characters
+  artnet.setShortName(deviceName);
+  // max. 63 characters
+  artnet.setLongName(longDeviceName);
+  // set a starting universe if you wish, defaults to 0
+  //artnetnode.setStartingUniverse(4);
+  artnet.setNumPorts(1);
+  artnet.enableDMXOutput(0);
   artnet.begin();
   artnet.setArtDmxCallback(onDmxPacket);
+
+  Serial.println("Artnet started");
 
   // initialize all timers
   tic_loop   = millis();
   tic_packet = millis();
   tic_fps    = millis();
   tic_ws    = millis();
+
+  Serial.println("Setup finished");
 }
 
 void loop() {
@@ -191,16 +216,22 @@ void loop() {
   if ((millis() - tic_loop) > 25) { //40Hz
     tic_loop = millis();
 
-    sendBreak();
     strip.Show();
-
-    Serial1.write(0); // Start-Byte
-    // send out the value of the selected channels (up to 512)
-    for (int i = 0; i < 10; i++) {
-      Serial1.write(global.data[i]);
+    if (dmxEnabled) {
+      sendBreak();
+      Serial1.write(0); // Start-Byte
+      // send out the value of the selected channels (up to 512)
+      for (int i = 0; i < global.length; i++) {
+        Serial1.write(global.data[i]);
       }
     }
+  }
 }
+
+RgbColor WheelColor(uint16_t brightness, uint16_t wheelValue) {
+       // divide the wheelValue by 360.0f to get a value between 0.0 and 1.0 needed for HslColor
+       return HslColor(wheelValue / 360.0f, 1.0f, brightness / 510.0f); // this will autoconvert back to RgbColor
+   }
 
 void SetupOTA()
 {
@@ -246,14 +277,11 @@ void initTest()
       }
     
       if (val < 0) val = 0;
-      strip.SetPixelColor(led, RgbColor(val,val,val));
+      RgbColor newColor = WheelColor(val, led);
+      strip.SetPixelColor(led, newColor);
     }
     strip.Show();
   }
-  strip.SetPixelColor(0, RgbColor(127,0,0));
-  strip.SetPixelColor(1, RgbColor(0,127,0));
-  strip.SetPixelColor(2, RgbColor(0,0,127));
-  strip.Show();
 }
 
 void setupWebServer()
@@ -294,13 +322,18 @@ void setupWebServer()
   });
 
   server.on("/info", HTTP_GET, [](AsyncWebServerRequest *request){
-    /*AsyncJsonResponse * response = new AsyncJsonResponse();
-
-    JsonObject& root = response->getRoot();
-    root["heap"] = ESP.getFreeHeap();
-    root["deviceName"] = deviceName;
-    response->setLength();
-    request->send(response);*/
+    StaticJsonDocument<200> doc;
+    doc["heap"] = String(ESP.getFreeHeap());
+    doc["device_name"] = String(deviceName);
+    doc["long_device_name"] = String(longDeviceName);
+    doc["universe"] = set_universe;
+    doc["starting_channel"] = startingChannel;
+    doc["dmx_enabled"] = dmxEnabled;
+    String output = "";
+    serializeJson(doc, output);
+    AsyncWebServerResponse *response = request->beginResponse(200, "application/json", output); //Sends 404 File Not Found
+    response->addHeader("Access-Control-Allow-Origin","*");
+    request->send(response);
   });
 
   //handles the setting update
@@ -309,8 +342,14 @@ void setupWebServer()
     if (request->hasParam("deviceName"))
     {
       strcpy(deviceName, request->getParam("deviceName")->value().c_str());
+      strcpy(longDeviceName, request->getParam("longDeviceName")->value().c_str());
+      set_universe = request->getParam("universe")->value().toInt();
+      startingChannel = request->getParam("startingChannel")->value().toInt();
+      //dmxEnabled = (request->getParam("build_in_led")->value().c_str() == "true");
       SaveSettings();
-      request->send(200,"text/plain","");
+      AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "ok"); //Sends 404 File Not Found
+      response->addHeader("Access-Control-Allow-Origin","*");
+      request->send(response);
       return;
     }
 
@@ -383,11 +422,11 @@ void LoadSettings()
         } else {
           Serial.println("\nparsed json");
           serializeJson(doc, Serial);
-          if (doc.containsKey("device_name"))
-          {
-            strcpy(deviceName, doc["device_name"]);
-          }
-          
+          if (doc.containsKey("device_name")) { strcpy(deviceName, doc["device_name"]); }
+          if (doc.containsKey("long_device_name")) { strcpy(longDeviceName, doc["long_device_name"]); }
+          if (doc.containsKey("universe")) { set_universe = doc["universe"]; }
+          if (doc.containsKey("starting_channel")) { startingChannel = doc["starting_channel"]; }          
+          if (doc.containsKey("dmx_enabled")) { dmxEnabled = doc["dmx_enabled"]; }  
         }
       }
     }
@@ -402,6 +441,10 @@ void SaveSettings()
   Serial.println("saving config");
   DynamicJsonDocument doc(1024);
   doc["device_name"] = deviceName;
+  doc["long_device_name"] = longDeviceName;
+  doc["universe"] = set_universe;
+  doc["starting_channel"] = startingChannel;
+  doc["dmx_enabled"] = dmxEnabled;
 
   File configFile = SPIFFS.open("/config.json", "w");
   if (!configFile) {
@@ -418,12 +461,12 @@ void onDmxPacket(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t *
   // count FPS
   packetCounter++;
 
-  if (universe == 1) {
+  if (universe == set_universe) {
     // read universe and put into the right part of the display buffer
-    for (int i = 0; i < length / 3; i++)
+    for (int i = 0; (i + startingChannel) < length / 3; i++)
     {
       int led = i;
-      if (led < NUM_LEDS) strip.SetPixelColor(led, RgbColor(data[i * 3], data[i * 3 + 1], data[i * 3 + 2]));
+      if (led < NUM_LEDS) strip.SetPixelColor(led, RgbColor(data[(i + startingChannel) * 3], data[(i + startingChannel) * 3 + 1], data[(i + startingChannel) * 3 + 2]));
     }
     // copy the data from the UDP packet over to the global universe buffer
     global.universe = universe;
