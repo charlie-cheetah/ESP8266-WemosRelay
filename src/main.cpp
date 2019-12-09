@@ -93,6 +93,16 @@ void setup() {
   global.data = (uint8_t *)malloc(512);
   for (int i = 0; i < 512; i++) global.data[i] = 0;
 
+  LoadSettings();
+
+  if (dmxEnabled) {
+    //configure serial for DMX
+    Serial1.begin(250000, SERIAL_8N2);
+  } else {
+    pinMode(2, OUTPUT);
+    digitalWrite(2, HIGH); // turn off LED
+  }
+
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
     Serial.println(F("SSD1306 allocation failed"));
@@ -103,20 +113,10 @@ void setup() {
     display.display();
   }
 
-  LoadSettings();
-
   //Start led strip
   strip.Begin();
   initTest();
 
-  if (dmxEnabled) {
-    //configure serial for DMX
-    Serial1.begin(250000, SERIAL_8N2);
-  } else {
-    pinMode(2, OUTPUT);
-    digitalWrite(2, HIGH); // turn off LED
-  }
-  
   //Setup WiFiManager and get us connected to wifi
   wifiManager.setAPCallback(configModeCallback);
   wifiManager.setSaveConfigCallback(saveConfigCallback);
@@ -339,13 +339,17 @@ void setupWebServer()
   //handles the setting update
   server.on("/settings", HTTP_POST, [](AsyncWebServerRequest *request){
 
-    if (request->hasParam("deviceName"))
+    if (request->hasParam("deviceName") && request->hasParam("longDeviceName") && request->hasParam("universe") && request->hasParam("startingChannel") && request->hasParam("dmxEnabled"))
     {
       strcpy(deviceName, request->getParam("deviceName")->value().c_str());
       strcpy(longDeviceName, request->getParam("longDeviceName")->value().c_str());
       set_universe = request->getParam("universe")->value().toInt();
       startingChannel = request->getParam("startingChannel")->value().toInt();
-      //dmxEnabled = (request->getParam("build_in_led")->value().c_str() == "true");
+      if (request->getParam("dmxEnabled")->value() == "true") {
+        dmxEnabled = true;
+      } else {
+        dmxEnabled = false;
+      }
       SaveSettings();
       AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "ok"); //Sends 404 File Not Found
       response->addHeader("Access-Control-Allow-Origin","*");

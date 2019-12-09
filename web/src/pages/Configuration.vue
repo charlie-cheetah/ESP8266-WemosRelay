@@ -57,7 +57,7 @@
                     if (typeof data.long_device_name !== 'undefined') this.longDeviceName = data.long_device_name
                     if (typeof data.universe !== 'undefined') this.universe = data.universe
                     if (typeof data.starting_channel !== 'undefined') this.startingChannel = data.starting_channel
-                    if (typeof data.build_in_led !== 'undefined') this.dmxEnabled = data.dmxEnabled
+                    if (typeof data.dmx_enabled !== 'undefined') this.dmxEnabled = data.dmx_enabled
                     console.log(typeof data.deviceName)
                 }.bind(this));
             }.bind(this));
@@ -69,7 +69,7 @@
                 url.searchParams.append('longDeviceName', this.longDeviceName)
                 url.searchParams.append('universe', this.universe)
                 url.searchParams.append('startingChannel', this.startingChannel)
-                url.searchParams.append('dmx_enabled', this.dmxEnabled)
+                url.searchParams.append('dmxEnabled', this.dmxEnabled)
                 fetch(url, {
                     method: 'POST'
                 });
