@@ -1,11 +1,18 @@
 #include "ESPAsyncWebServer.h"
 
+extern int relayState;
+
 void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
   if(type == WS_EVT_CONNECT){
     //client connected
     Serial.printf("ws[%s][%u] connect\n", server->url(), client->id());
     client->printf("Hello Client %u :)", client->id());
     client->ping();
+    if (relayState) {
+      client->printf("on");
+    } else {
+      client->printf("off");
+    }
   } else if(type == WS_EVT_DISCONNECT){
     //client disconnected
     Serial.printf("ws[%s][%u] disconnect: %u\n", server->url(), client->id());
@@ -31,12 +38,10 @@ void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventT
           global.data[i] = data[i];
           Serial.printf("%02x ", data[i]);
         }
+        //Send to all clients 
+        server->binaryAll(data, len);
         Serial.printf("\n");
       }
-      if(info->opcode == WS_TEXT)
-        client->text("I got your text message");
-      else
-        client->binary("I got your binary message");
     } else {
       //message is comprised of multiple frames or the frame is split into multiple packets
       if(info->index == 0){

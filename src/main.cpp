@@ -48,6 +48,14 @@ float fps = 0;
 NeoPixelBus<NeoGrbFeature, Neo800KbpsMethod> strip(NUM_LEDS, DATA_PIN);
 
 const int relayPin = D6;
+const int button = D5;
+
+int relayState = HIGH; 
+int buttonState;             // the current reading from the input pin
+int lastButtonState = LOW;   // the previous reading from the input pin
+unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
+unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
+
 DNSServer dnsServer;
 AsyncWebServer server(80);
 AsyncWebSocket previewSocket("/ws");
@@ -181,6 +189,8 @@ void setup() {
   tic_fps    = millis();
   tic_ws    = millis();
 
+  pinMode(button, INPUT);
+
   Serial.println("Setup finished");
 }
 
@@ -188,6 +198,41 @@ void loop() {
   ArduinoOTA.handle();
   artnet.read();
 
+  // read the state of the switch into a local variable:
+  int reading = digitalRead(button);
+
+  // check to see if you just pressed the button
+  // (i.e. the input went from LOW to HIGH), and you've waited long enough
+  // since the last press to ignore any noise:
+
+  // If the switch changed, due to noise or pressing:
+  if (reading != lastButtonState) {
+    // reset the debouncing timer
+    lastDebounceTime = millis();
+  }
+
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    // whatever the reading is at, it's been there for longer than the debounce
+    // delay, so take it as the actual current state:
+
+    // if the button state has changed:
+    if (reading != buttonState) {
+      buttonState = reading;
+
+      // only toggle the LED if the new button state is HIGH
+      if (buttonState == HIGH) {
+        Serial.println("Button pressed");
+        relayState = !relayState;
+        if (relayState) {
+          relayOneOn();
+        } else {
+          relayOneOff();
+        }
+      }
+    }
+  }
+
+  lastButtonState = reading;
   //Handle WebSocket
   if ((millis() - tic_ws) > 250) { //4Hz
     tic_ws = millis();
@@ -295,13 +340,11 @@ void setupWebServer()
 
   //Used for relay control
   server.on("/relayon", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("relay on");
-    digitalWrite(relayPin, HIGH); // turn on relay with voltage HIGH
+    relayOneOn();
     request->send(200, "text/plain", "relay on");
   });
   server.on("/relayoff", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("relay off");
-    digitalWrite(relayPin, LOW); // turn on relay with voltage HIGH
+    relayOneOff();
     request->send(200, "text/plain", "relay off");
   });
 
@@ -364,13 +407,17 @@ void setupWebServer()
 
 void relayOneOn()
 {
-  Serial.println("Command from Alex: Turn Relay One On");
+  previewSocket.textAll("on",2);
+  Serial.println("Turn Relay On");
+  relayState = HIGH;
   digitalWrite(relayPin, HIGH);
 }
 
 void relayOneOff()
 {
-  Serial.println("Command from Alex: Turn Relay One Off");
+  previewSocket.textAll("off",3);
+  Serial.println("Turn Relay Off");
+  relayState = LOW;
   digitalWrite(relayPin, LOW);
 }
 

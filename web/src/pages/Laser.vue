@@ -6,7 +6,7 @@
             <v-switch
                     v-model="switch1"
                     :label="switch1?'On':'Off'"
-
+                @change="switchRelay"
             ></v-switch>
 
             <v-select v-model="ch1" @input="sendData" :items="ch1presets"
@@ -16,8 +16,10 @@
 
             <b-slider label="Pattern"
                       thumb-label
-                      v-model="ch2" :max="255" ></b-slider>
-
+                      v-model="ch2" :max="255"
+                      @input="sendData"
+                      @change="sendData"
+            ></b-slider>
             <b-slider v-model="ch3"
                       label="Rotation"
                       :max="255"
@@ -89,14 +91,14 @@
                 <b-slider-tick :value="128">Cycle speed</b-slider-tick>
             </b-slider>
 
-            <v-btn color="primary" @click="addPreset">Add to sequence</v-btn>
+            <v-btn class="mt-8" color="primary" :disabled="currentSequence === null" @click="addPreset">Add to sequence</v-btn>
 
 
                 <v-card class="mt-2">
                     <v-card-text>
                         <div class="d-flex flex-wrap">
-                            <p class="pa-2">Sequences:</p>
-                            <div class="mr-2" v-for="(item,index) in sequences" :key="'seq'+index">
+                            <span class="pa-2">Sequences:</span>
+                            <div class="mr-2 mb-2" v-for="(item,index) in sequences" :key="'seq'+index">
                                 <v-btn color="teal" v-if="index===currentSequence">{{item.name}} ({{item.presets.length}})</v-btn>
                                 <v-btn v-else @click="changeSequence(index)">{{item.name}} ({{item.presets.length}})</v-btn>
                             </div>
@@ -110,15 +112,15 @@
                             ></v-text-field>
                         </div>
                     </v-card-text>
-                    <v-card-actions>
-                        <v-btn color="primary" small @click="saveStorage">Save to storage</v-btn>
-                        <v-btn color="primary" small @click="enableSequenceRename">Rename sequence</v-btn>
-                        <v-btn color="error" small @click="deleteSequence">Delete sequence</v-btn>
+                    <v-card-actions class="flex-wrap">
+                        <v-btn class="mb-2" color="primary" small @click="saveStorage">Save to storage</v-btn>
+                        <v-btn class="mb-2" color="primary" small :disabled="currentSequence === null" @click="enableSequenceRename">Rename sequence</v-btn>
+                        <v-btn class="mb-2" color="error" small :disabled="currentSequence === null" @click="deleteSequence">Delete sequence</v-btn>
                     </v-card-actions>
                 </v-card>
 
                 <v-row>
-                    <v-col>
+                    <v-col v-if="currentSequence !== null">
                         <div class="d-flex justify-space-between pa-2 elevation-4 mb-2" :class="i===currentPreset?'teal':'secondary'" @click="selectPreset(i)" v-for="(pre,i) in sequences[currentSequence].presets" :key="'pre'+i">
                             <v-chip :color="pre.values[0]===1?'error':'orange'">
                                 {{pre.values[0]===1?'Off':''}}
@@ -134,7 +136,7 @@
                             <v-chip color="orange"><v-icon>mdi-arrow-expand-all</v-icon>{{pre.values[6]}}</v-chip>
                             <v-chip color="orange"><v-icon>mdi-palette</v-icon>{{pre.values[6]}}</v-chip>
 
-                            <v-btn color="error" @click="removePreset(i)">delete</v-btn>
+                            <v-btn color="error" @click.stop="removePreset(i)">delete</v-btn>
                         </div>
                     </v-col>
                     <v-col>
@@ -211,8 +213,8 @@
                     {'id':150,'name':'Auto'},
                     {'id':220,'name':'Auto - Sound'},
                 ],
-                currentSequence: 0,
-                currentPreset: 0,
+                currentSequence: null,
+                currentPreset: null,
                 sequences: [
                     {name:'unnamed',
                         presets:[
@@ -277,33 +279,34 @@
                 this.rename=false;
             },
             removePreset: function(index) {
+                if (this.currentPreset > 0) {this.currentPreset--;} else { this.currentPreset = null;}
                 this.sequences[this.currentSequence].presets.splice(index,1);
             },
             selectPreset: function(index) {
                 this.currentPreset = index;
                 for (const x in this.sequences[this.currentSequence].presets[index].values) {
-                    this['ch'+x] = this.sequences[this.currentSequence].presets[index].values[x];
+                    this['ch'+ (parseInt(x)+1)] = this.sequences[this.currentSequence].presets[index].values[x];
                 }
+                this.sendData();
             },
             deleteSequence: function() {
                 let tmp = this.currentSequence;
-                this.currentSequence--;
+                if (this.currentSequence > 0) {this.currentSequence--;} else { this.currentSequence = null;}
                 this.sequences.splice(tmp,1);
+            },
+            switchRelay: function() {
+                if (this.switch1) this.turnOn(); else this.turnOff();
             },
             turnOn: function() {
                 let url = new URL('http://' + this.$location + '/relayon');
                 fetch(url, {
-
-                }).then(function(response){
-                    this.response = response
+                    mode:'no-cors'
                 });
             },
             turnOff: function() {
                 let url = new URL('http://' + this.$location + '/relayoff');
                 fetch(url, {
-
-                }).then(function(response){
-                    this.response = response
+                    mode:'no-cors'
                 });
             },
             sendData: function() {

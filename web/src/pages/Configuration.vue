@@ -45,8 +45,7 @@
             fetch(url, {
             }).then(function(response){
                 if (response.status !== 200) {
-                    console.log('Looks like there was a problem. Status Code: ' +
-                        response.status);
+
                     return;
                 }
 
@@ -58,7 +57,6 @@
                     if (typeof data.universe !== 'undefined') this.universe = data.universe
                     if (typeof data.starting_channel !== 'undefined') this.startingChannel = data.starting_channel
                     if (typeof data.dmx_enabled !== 'undefined') this.dmxEnabled = data.dmx_enabled
-                    console.log(typeof data.deviceName)
                 }.bind(this));
             }.bind(this));
         },
